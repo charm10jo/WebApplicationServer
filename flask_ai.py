@@ -1,4 +1,5 @@
 from flask import Flask, request
+import re
 
 # torch
 import torch
@@ -21,7 +22,6 @@ from hanspell import spell_checker
 from PyKomoran import *
 import kss
 from konlpy.tag import  Okt, Mecab
-#from pykospacing import spacing
 import json
 
 mecab = Mecab()
@@ -146,14 +146,12 @@ def predict(predict_sentence):
             elif np.argmax(logits) == 7: division = '안과'
             elif np.argmax(logits) == 8: division = '이비인후과'
             elif np.argmax(logits) == 9: division = '재활의학과'
-            elif np.argmax(logits) == 10: division = '정신건강의학과'
+            elif np.argmax(logits) == 10: division = '정신과'
             elif np.argmax(logits) == 11: division = '정형외과'
             elif np.argmax(logits) == 12: division = '치과'
             elif np.argmax(logits) == 13: division = '피부과'
 
-    return [np.argmax(logits), probability[np.argmax(logits)]]
-
-# tokenization
+    return [np.argmax(logits), probability.index(sorted(probability, reverse=True)[1])]
 
 # stopwords 불러오기
 stopwords = [
@@ -354,23 +352,50 @@ def tokenize(userInput):
   
   # # 4~5. nouns 추출
   usersCleanedTextBeforeStopwordsCheck = (words_list)
+
   extract_nouns = mecab.nouns(" ".join(words_list))
+  extract_nouns = " ".join(extract_nouns)
+  if((type(extract_nouns) is not float and len(extract_nouns) != 0)):
+        extract_nouns = re.sub("대한의사협회|상 담 사 세|감 피 피 너 뮤|곳|의 미|박헌구|지식인|뭔가|게시물|진단 치료 를|진료|모스 코피|를|이광준|오늘|평 식|장 현채|권 순모|중간|다음 날|최근|노 무사|노무사|교통사고|변호사|노동청|민원|조언|상담 사 세|내공|의 심|대부분|쾌차|이게|움|가이드라인|도록|하루|네이버|김상범|이용|법|상담|달|김석준|사진|대부분|안녕|버|이미지|이양구|전문의|피부과전문의|이광준|권순모|박현구|김봉수|장현채|한경호|닥톡|신홍범|전평식|김태만|이세라|김선영|구오섭|박종원|최연철|한형일|이형근|이재성|변상권|이정찬|중요|참고|감사|네이버|지식|상담 사|전문의|진단|문의|검진|정확|여학생|남학생|뭔가|변상|댓글 성 심것 껏|답변|외|하루|료|화질 선택 옵션 자동|정찬|검|대처|추천|립니|입 니|치료 결정|연철|유감|사장|주방|상담 사 형|이것|입니다|구 섭|촛|이상|최소|최대|곳|상태|느낌|영향|답변|감사|도움|값|참고|중요", "", extract_nouns)
+        extract_nouns = re.sub("시 력", "시력", extract_nouns)
+        extract_nouns = re.sub("마사 지기", "마사지기", extract_nouns)
+        extract_nouns = re.sub("광수 용체", "광수용체", extract_nouns)
+        extract_nouns = re.sub("망막 색 소변 증", "망막색소변성증", extract_nouns)
+        extract_nouns = re.sub("백 내장", "백내장", extract_nouns)
+        extract_nouns = re.sub("강화 술", "강화술", extract_nouns)
+        extract_nouns = re.sub("목소 리", "목소리", extract_nouns)
+        extract_nouns = re.sub("슬개건 염", "슬개건염", extract_nouns)
+        extract_nouns = re.sub("체 감량", "체중감량", extract_nouns)
+        extract_nouns = re.sub("표 피낭", "표피낭", extract_nouns)
+        extract_nouns = re.sub("병 리", "병리", extract_nouns)
+        extract_nouns = re.sub("포 러스 연고", "포러스 연고", extract_nouns)
+        extract_nouns = re.sub("덱 스핀 정", "덱스핀정", extract_nouns)
+        extract_nouns = re.sub("조 증 장애", "조증장애", extract_nouns)
+        extract_nouns = re.sub("근육 막이", "근육막", extract_nouns)
+        extract_nouns = re.sub("임 플란트", "임플란트", extract_nouns)
+        extract_nouns = re.sub("류 마티스", "류마티스", extract_nouns)
+        extract_nouns = re.sub("폭 센", "폭센", extract_nouns)
+        extract_nouns = re.sub("발 기 부전", "발기부전", extract_nouns)
+        extract_nouns = re.sub("립 선", "전립선", extract_nouns)
+        extract_nouns = re.sub("조 스프레이", "조루스프레이", extract_nouns)
+        extract_nouns = re.sub("마 사지|맛 사지", "마사지", extract_nouns)
+        extract_nouns = extract_nouns.split(" ")
+  # 6. 불용어 처리
+  cleaned_words = []
+  nouns_cleaned_words = []
 
   return [usersCleanedTextBeforeStopwordsCheck, extract_nouns]
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
-
 @app.route('/predict', methods=['POST'])
 def division_prediction():
     preprocessed = json.loads(request.get_data(), encoding='utf-8')["token"]
-    preprocessed = ' '.join(preprocessed)
-    print(preprocessed)
     
     if len(preprocessed) != 0:
         predict_division = predict(preprocessed)
-        print(predict_division)
-        result = {"division": str(predict_division[0]), "prob": predict_division[1]}
+        
+        result = {"division": str(predict_division[0]), "prob": str(predict_division[1])}
         return json.dumps(result, ensure_ascii=False)
     else:
         return "Input symptoms"
@@ -378,9 +403,9 @@ def division_prediction():
 @app.route('/tokenize', methods=['POST'])
 def text_token():
     symptoms = json.loads(request.get_data(), encoding='utf-8')["text"]
-
+    
     token_result = tokenize(symptoms)
-    doc = {"tok_symptoms":token_result[0], "nouns":token_result[1]}
+    doc = {"tok_symptoms":" ".join(token_result[0]), "nouns":token_result[1]}
     return json.dumps(doc, ensure_ascii=False)
 
 if __name__ == '__main__':
